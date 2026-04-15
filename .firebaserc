@@ -1,0 +1,15 @@
+{
+  "projects": {
+    "default": "melodia-ganap"
+  },
+  "targets": {
+    "melodia-ganap": {
+      "hosting": {
+        "sameera-music": [
+          "sameera-music"
+        ]
+      }
+    }
+  },
+  "etags": {}
+}
