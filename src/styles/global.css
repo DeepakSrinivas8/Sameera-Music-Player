@@ -110,3 +110,37 @@ img { display: block; }
 *:nth-child(10) { --stagger-delay: 0.50s; }
 *:nth-child(11) { --stagger-delay: 0.55s; }
 *:nth-child(12) { --stagger-delay: 0.60s; }
+
+/* ─── Responsive Design ──────────────────────────────────────── */
+
+@media (max-width: 768px) {
+  .app-layout {
+    display: flex;
+    flex-direction: column;
+    height: 100vh;
+    overflow-x: hidden;
+    overflow-y: auto;
+  }
+  
+  .sidebar {
+    width: 100%;
+    border-right: none;
+    border-bottom: 1px solid var(--border);
+    padding: 16px;
+  }
+
+  .app-main {
+    flex: 1;
+    overflow: visible;
+    padding-bottom: calc(var(--player-height) + 20px);
+  }
+
+  .app-player {
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    z-index: 1000;
+    box-shadow: 0 -4px 20px rgba(0,0,0,0.1);
+  }
+}
