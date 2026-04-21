@@ -1,11 +1,9 @@
 import { usePlayer } from '../context/PlayerContext';
-import { Music, Library, Star, Settings } from 'lucide-react';
-import { QuickPlay } from './QuickPlay';
+import { Music, Library } from 'lucide-react';
 import '../styles/Sidebar.css';
 
 const NAV_ITEMS = [
   { id: 'library', label: 'Library', icon: Library },
-  { id: 'featured', label: 'Featured', icon: Star },
 ];
 
 export function Sidebar() {
@@ -36,9 +34,6 @@ export function Sidebar() {
 
       <div className="sidebar-spacer" />
 
-      {/* Quick Play Widget */}
-      <QuickPlay />
-
       {/* Now Playing mini card */}
       {currentTrack && (
         <div className="now-playing-card">
@@ -64,17 +59,11 @@ export function Sidebar() {
           <div className="np-meta">
             <span className="np-label">Now Playing</span>
             <span className="np-title">{currentTrack.title}</span>
-            <span className="np-artist">{currentTrack.artist}</span>
+            {currentTrack.artist && <span className="np-artist">{currentTrack.artist}</span>}
           </div>
         </div>
       )}
 
-      <div className="sidebar-settings">
-        <a href="#settings" className="nav-item" aria-label="Settings">
-          <Settings size={18} />
-          <span>Settings</span>
-        </a>
-      </div>
     </aside>
   );
 }

@@ -233,7 +233,6 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
       year: 0,
       mediaUrl,
       coverUrl: '',
-      isFeatured: false,
       mediaKind: type,
       isYoutube,
     };

@@ -10,7 +10,6 @@ export interface Track {
   year: number;
   mediaUrl: string;
   coverUrl: string;
-  isFeatured: boolean;
   /** Set only on synthetic quick-play tracks — indicates actual media kind */
   mediaKind?: 'audio' | 'video';
   /** Flag to render an iframe instead of an HTML5 video tag */
@@ -72,40 +71,93 @@ export function convertDriveUrl(url: string, type: 'media' | 'image'): string {
 /**
  * Parses the gviz JSONP response into Song objects.
  */
-function parseGvizResponse(rawText: string): Track[] {
+function normalizeColumnName(value: string): string {
+  return value.toLowerCase().replace(/[^a-z0-9]/g, '');
+}
+
+function findColumn(
+  labels: Map<string, number>,
+  aliases: string[],
+  fallbackIndex: number
+): number {
+  for (const alias of aliases) {
+    const idx = labels.get(normalizeColumnName(alias));
+    if (idx !== undefined) return idx;
+  }
+  return fallbackIndex;
+}
+
+function getCellValue(c: any[], index: number): any {
+  return index >= 0 ? c[index]?.v : undefined;
+}
+
+function getDuration(c: any[], index: number): string {
+  if (index < 0) return '0:00';
+  const raw = c[index];
+  return raw?.f ?? raw?.v ?? '0:00';
+}
+
+function sortByTitle(a: Track, b: Track): number {
+  return a.title.localeCompare(b.title, undefined, {
+    sensitivity: 'base',
+    numeric: true,
+  });
+}
+
+function parseGvizResponse(rawText: string, type: 'audio' | 'video'): Track[] {
   const match = rawText.match(/setResponse\(([\s\S]*)\);?\s*$/);
   if (!match || !match[1]) {
     throw new Error(`Unexpected response format from Google Sheets`);
   }
   const jsonStr = match[1].trim();
   const data = JSON.parse(jsonStr);
+  const cols = data?.table?.cols ?? [];
   const rows = data?.table?.rows ?? [];
+  const labels = new Map<string, number>();
 
+  cols.forEach((col: any, index: number) => {
+    const label = normalizeColumnName(col?.label || col?.id || '');
+    if (label) labels.set(label, index);
+  });
+
+  const idIndex = findColumn(labels, ['id'], 0);
+  const titleIndex = findColumn(labels, ['title', 'name', 'movie'], 1);
+  const artistIndex = findColumn(labels, ['artist', 'singer'], type === 'audio' ? 2 : -1);
+  const albumIndex = findColumn(labels, ['album', 'movieName'], type === 'audio' ? 3 : -1);
+  const genreIndex = findColumn(labels, ['genre', 'category'], type === 'audio' ? 4 : -1);
+  const durationIndex = findColumn(labels, ['duration', 'runtime'], type === 'audio' ? 5 : 2);
+  const yearIndex = findColumn(labels, ['year'], type === 'audio' ? 6 : 3);
+  const mediaUrlIndex = findColumn(
+    labels,
+    [type === 'video' ? 'videoUrl' : 'audioUrl', 'mediaUrl', 'driveUrl', 'driveLink', 'url'],
+    type === 'audio' ? 7 : 4
+  );
+  const coverUrlIndex = findColumn(
+    labels,
+    ['coverUrl', 'cover', 'poster', 'posterUrl', 'thumbnail', 'imageUrl'],
+    type === 'audio' ? 8 : 5
+  );
   return rows
     .map((row: any) => {
       const c = row.c;
-      if (!c || !c[0]?.v) return null;
+      if (!c) return null;
+      const title = getCellValue(c, titleIndex) ?? 'Unknown Title';
+      if (!getCellValue(c, idIndex) || !title) return null;
 
-      const durationRaw = c[5];
-      let duration = '0:00';
-      if (durationRaw?.f) {
-        duration = durationRaw.f;
-      }
-
-      const rawAudioUrl = c[7]?.v ?? '';
-      const rawCoverUrl = c[8]?.v ?? '';
+      const rawMediaUrl = getCellValue(c, mediaUrlIndex) ?? '';
+      const rawCoverUrl = getCellValue(c, coverUrlIndex) ?? '';
+      const album = type === 'video' ? title : getCellValue(c, albumIndex) ?? 'Unknown Album';
 
       return {
-        id: c[0]?.v ?? 0,
-        title: c[1]?.v ?? 'Unknown Title',
-        artist: c[2]?.v ?? 'Unknown Artist',
-        album: c[3]?.v ?? 'Unknown Album',
-        genre: c[4]?.v ?? 'Unknown',
-        duration,
-        year: c[6]?.v ?? 0,
-        mediaUrl: convertDriveUrl(rawAudioUrl, 'media'),
+        id: getCellValue(c, idIndex) ?? 0,
+        title,
+        artist: getCellValue(c, artistIndex) ?? '',
+        album,
+        genre: getCellValue(c, genreIndex) ?? '',
+        duration: getDuration(c, durationIndex),
+        year: getCellValue(c, yearIndex) ?? 0,
+        mediaUrl: convertDriveUrl(rawMediaUrl, 'media'),
         coverUrl: convertDriveUrl(rawCoverUrl, 'image'),
-        isFeatured: c[9]?.v ?? false,
       } as Track;
     })
     .filter(Boolean) as Track[];
@@ -158,7 +210,7 @@ export async function fetchTracks(type: 'audio' | 'video'): Promise<Track[]> {
   }
 
   const text = await response.text();
-  const tracks = parseGvizResponse(text);
+  const tracks = parseGvizResponse(text, type).sort(sortByTitle);
   trackCache[type] = tracks;
   return tracks;
 }

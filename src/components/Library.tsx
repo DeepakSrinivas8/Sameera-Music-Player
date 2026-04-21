@@ -1,7 +1,8 @@
 import { useState, useMemo } from 'react';
 import { usePlayer } from '../context/PlayerContext';
 import { SongCard } from './SongCard';
-import { Search, Loader2, AlertCircle, ArrowLeft, Film, Music as MusicIcon, Folder, ListMusic, X, RotateCcw, RotateCw } from 'lucide-react';
+import { Search, Loader2, AlertCircle, ArrowLeft, Film, Music as MusicIcon, X, Zap } from 'lucide-react';
+import { QuickPlay } from './QuickPlay';
 import '../styles/Library.css';
 import type { Track } from '../services/sheetService';
 
@@ -9,11 +10,21 @@ export function Library() {
   const { 
     tracks, isLoading, error, searchQuery, setSearchQuery, 
     activeGenre, setActiveGenre, mediaType, setMediaType,
-    currentTrack, audioRef, closePlayer, skipForward, skipBackward
+    currentTrack, audioRef, closePlayer, playTrack
   } = usePlayer();
 
   const [selectedAlbum, setSelectedAlbum] = useState<string | null>(null);
   const [viewMode, setViewMode] = useState<'folders' | 'all'>('folders');
+  const [isQuickPlayOpen, setIsQuickPlayOpen] = useState(false);
+  const isMoviesMode = mediaType === 'video';
+
+  const formatCount = (count: number, singular: string, plural: string) =>
+    `${count} ${count === 1 ? singular : plural}`;
+
+  const compareText = (a: string, b: string) =>
+    a.localeCompare(b, undefined, { sensitivity: 'base', numeric: true });
+
+  const compareTrackTitle = (a: Track, b: Track) => compareText(a.title, b.title);
 
   const albums = useMemo(() => {
     const map = new Map<string, Track[]>();
@@ -22,26 +33,30 @@ export function Library() {
       albumTracks.push(t);
       map.set(t.album, albumTracks);
     }
-    return Array.from(map.entries()).map(([name, tList]) => ({ name, tracks: tList, firstTrack: tList[0] }));
+    return Array.from(map.entries())
+      .map(([name, tList]) => {
+        const sortedTracks = [...tList].sort(compareTrackTitle);
+        return { name, tracks: sortedTracks, firstTrack: sortedTracks[0] };
+      })
+      .sort((a, b) => compareText(a.name, b.name));
   }, [tracks]);
 
   const genres = useMemo(() => {
-    const all = tracks.map((s) => s.genre);
+    const all = tracks.map((s) => s.genre).filter(Boolean);
     const unique = Array.from(new Set(all));
     return ['All', ...unique];
   }, [tracks]);
 
   const filteredAlbums = useMemo(() => {
     return albums.filter((album) => {
-      const matchGenre = activeGenre === 'All' || album.tracks.some(t => t.genre === activeGenre);
       const q = searchQuery.toLowerCase();
       const matchSearch =
         !q ||
         album.name.toLowerCase().includes(q) ||
         album.tracks.some(t => t.artist.toLowerCase().includes(q));
-      return matchGenre && matchSearch;
+      return matchSearch;
     });
-  }, [albums, activeGenre, searchQuery]);
+  }, [albums, searchQuery]);
 
   const filteredTracks = useMemo(() => {
     return tracks.filter((t) => {
@@ -49,7 +64,7 @@ export function Library() {
       const q = searchQuery.toLowerCase();
       const matchSearch = !q || t.title.toLowerCase().includes(q) || t.artist.toLowerCase().includes(q);
       return matchGenre && matchSearch;
-    });
+    }).sort(compareTrackTitle);
   }, [tracks, activeGenre, searchQuery]);
 
   const albumTracks = useMemo(() => {
@@ -63,7 +78,23 @@ export function Library() {
   const handleToggleMediaType = (type: 'audio' | 'video') => {
     setMediaType(type);
     setSelectedAlbum(null);
+    setViewMode('folders');
   };
+
+  const handleFolderClick = (album: { name: string; tracks: Track[] }) => {
+    if (isMoviesMode) {
+      const movie = album.tracks[0];
+      if (movie) playTrack(movie, album.name);
+      return;
+    }
+
+    setSelectedAlbum(album.name);
+    setSearchQuery('');
+  };
+
+  const searchPlaceholder = selectedAlbum
+    ? (isMoviesMode ? 'Search movies...' : 'Search tracks...')
+    : (isMoviesMode ? 'Search movies...' : 'Search songs, artists...');
 
   // Quick-play tracks carry mediaKind; library tracks use the global mediaType
   const effectiveType = currentTrack?.mediaKind ?? mediaType;
@@ -118,7 +149,15 @@ export function Library() {
               onClick={() => handleToggleMediaType('video')}
               style={{ display: 'flex', alignItems: 'center', gap: '6px' }}
             >
-              <Film size={14} /> Videos
+              <Film size={14} /> Movies
+            </button>
+            <button
+              className="quickplay-trigger quickplay-trigger--inline"
+              onClick={() => setIsQuickPlayOpen(true)}
+              aria-label="Open quick play"
+            >
+              <Zap size={15} />
+              Quick Play
             </button>
           </div>
           
@@ -130,32 +169,61 @@ export function Library() {
               >
                 Movies Base
               </button>
-              <button 
-                className={`view-tab ${viewMode === 'all' ? 'active' : ''}`}
-                onClick={() => setViewMode('all')}
-              >
-                All {mediaType === 'audio' ? 'Songs' : 'Videos'}
-              </button>
+              {!isMoviesMode && (
+                <button
+                  className={`view-tab ${viewMode === 'all' ? 'active' : ''}`}
+                  onClick={() => setViewMode('all')}
+                >
+                  All Songs
+                </button>
+              )}
             </div>
           )}
         </div>
         
-        <div className="search-wrap" style={{ alignSelf: 'flex-start', marginTop: '10px' }}>
-          <Search size={18} className="search-icon" />
-          <input
-            id="search-input"
-            type="text"
-            className="search-input"
-            placeholder={selectedAlbum ? "Search tracks..." : "Search movies, artists..."}
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            aria-label="Search"
-          />
+        <div className="library-actions" style={{ alignSelf: 'flex-start', marginTop: '10px' }}>
+          <div className="search-wrap">
+            <Search size={18} className="search-icon" />
+            <input
+              id="search-input"
+              type="text"
+              className="search-input"
+              placeholder={searchPlaceholder}
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              aria-label="Search"
+            />
+          </div>
         </div>
       </div>
 
+      {isQuickPlayOpen && (
+        <div
+          className="quickplay-modal-backdrop"
+          onClick={() => setIsQuickPlayOpen(false)}
+          role="presentation"
+        >
+          <div
+            className="quickplay-modal"
+            role="dialog"
+            aria-modal="true"
+            aria-label="Quick Play"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <button
+              className="quickplay-modal-close"
+              onClick={() => setIsQuickPlayOpen(false)}
+              aria-label="Close quick play"
+            >
+              <X size={18} />
+            </button>
+            <QuickPlay onPlay={() => setIsQuickPlayOpen(false)} />
+          </div>
+        </div>
+      )}
+
       {/* Genre Filter Chips */}
-      {!selectedAlbum && (
+      {!selectedAlbum && !isMoviesMode && viewMode === 'all' && (
         <div className="genre-chips" role="group" aria-label="Genre filter">
           {genres.map((g) => (
             <button
@@ -174,7 +242,7 @@ export function Library() {
       {isLoading && (
         <div className="state-container">
           <Loader2 size={40} className="spinner" />
-          <p>Loading your {mediaType === 'audio' ? 'music' : 'videos'}...</p>
+          <p>Loading your {isMoviesMode ? 'movies' : 'music'}...</p>
         </div>
       )}
 
@@ -197,7 +265,9 @@ export function Library() {
                 </button>
                 <h2 className="section-title" style={{ margin: 0 }}>
                   {selectedAlbum}
-                  <span className="song-count">{albumTracks.length} items</span>
+                  <span className="song-count">
+                    {formatCount(albumTracks.length, isMoviesMode ? 'movie' : 'track', isMoviesMode ? 'movies' : 'tracks')}
+                  </span>
                 </h2>
               </div>
               
@@ -213,11 +283,13 @@ export function Library() {
                 </div>
               )}
             </section>
-          ) : viewMode === 'folders' ? (
+          ) : isMoviesMode || viewMode === 'folders' ? (
             <section className="all-songs-section" id="library">
               <h2 className="section-title">
-                {searchQuery || activeGenre !== 'All' ? 'Matched Movies' : 'All Movies'}
-                <span className="song-count">{filteredAlbums.length} folders</span>
+                {searchQuery ? 'Matched Movies' : 'All Movies'}
+                <span className="song-count">
+                  {formatCount(filteredAlbums.length, isMoviesMode ? 'movie' : 'folder', isMoviesMode ? 'movies' : 'folders')}
+                </span>
               </h2>
 
               {filteredAlbums.length === 0 ? (
@@ -227,10 +299,7 @@ export function Library() {
               ) : (
                 <div className="songs-grid folders-grid">
                   {filteredAlbums.map((album) => (
-                    <div className="folder-card" key={album.name} onClick={() => {
-                        setSelectedAlbum(album.name);
-                        setSearchQuery('');
-                      }}>
+                    <div className="folder-card" key={album.name} onClick={() => handleFolderClick(album)}>
                       <div className="folder-artwork">
                         {album.firstTrack?.coverUrl ? (
                           <img src={album.firstTrack.coverUrl} alt={album.name} />
@@ -241,7 +310,9 @@ export function Library() {
                       </div>
                       <div className="folder-info">
                         <h3 className="folder-title">{album.name}</h3>
-                        <p className="folder-count">{album.tracks.length} {mediaType === 'audio' ? 'Tracks' : 'Videos'}</p>
+                        <p className="folder-count">
+                          {formatCount(album.tracks.length, isMoviesMode ? 'Movie' : 'Track', isMoviesMode ? 'Movies' : 'Tracks')}
+                        </p>
                       </div>
                     </div>
                   ))}
@@ -251,8 +322,10 @@ export function Library() {
           ) : (
             <section className="all-songs-section" id="library">
               <h2 className="section-title">
-                All {mediaType === 'audio' ? 'Songs' : 'Videos'}
-                <span className="song-count">{filteredTracks.length} items</span>
+                All Songs
+                <span className="song-count">
+                  {formatCount(filteredTracks.length, 'track', 'tracks')}
+                </span>
               </h2>
 
               {filteredTracks.length === 0 ? (

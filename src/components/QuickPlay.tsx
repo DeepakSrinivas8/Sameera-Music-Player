@@ -19,7 +19,11 @@ function sniffFromExtension(url: string): MediaKind | null {
   return null;
 }
 
-export function QuickPlay() {
+interface QuickPlayProps {
+  onPlay?: () => void;
+}
+
+export function QuickPlay({ onPlay }: QuickPlayProps) {
   const { playUrl } = usePlayer();
   const [url, setUrl] = useState('');
   const [error, setError] = useState('');
@@ -92,6 +96,7 @@ export function QuickPlay() {
     setUrl('');
     setError('');
     setDetection({ status: 'idle' });
+    onPlay?.();
   };
 
   const handleKeyDown = (e: React.KeyboardEvent) => {

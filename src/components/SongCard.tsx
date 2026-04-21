@@ -52,7 +52,6 @@ export function SongCard({ song, index, albumName }: SongCardProps) {
             {isActive && isPlaying ? <Pause size={24} /> : <Play size={24} />}
           </div>
         </div>
-        {song.isFeatured && <span className="featured-badge">✦ Featured</span>}
       </div>
 
       <div className="song-card-info">
